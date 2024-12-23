@@ -2,8 +2,8 @@
 GENTOO_ROOTDIR="${GENTOO_ROOTDIR:-/mnt/gentoo}"
 
 #VIDEO_CARDS_VIVOBOOK="amdgpu radeonsi"
-#VIDEO_CARDS_NSNOVO="i915"
-VIDEO_CARDS="i915"
+#VIDEO_CARDS_NSNOVO="intel"
+VIDEO_CARDS="intel"
 INPUT_DEVICES="libinput evdev joystick"
 
 cat > "${GENTOO_ROOTDIR}/etc/portage/make.conf" << EOF
