@@ -60,7 +60,7 @@ fi
 if [ -e "${OUTPUT}" ]; then
   printf "Stage3 already downloaded, remove to redownload :\n"
 else
-  curl -o "${OUTPUT}" -sL "${LATEST}" || exit $?
+  curl -o "${OUTPUT}" -L "${LATEST}" || exit $?
   printf "Stage3 downloaded :\n"
 fi
 printf " -> ${OUTPUT}\n"
