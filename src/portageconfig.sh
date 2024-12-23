@@ -1,10 +1,12 @@
 #!/bin/sh
+GENTOO_ROOTDIR="${GENTOO_ROOTDIR:-/mnt/gentoo}"
+
 #VIDEO_CARDS_VIVOBOOK="amdgpu radeonsi"
 #VIDEO_CARDS_NSNOVO="i915"
 VIDEO_CARDS="i915"
 INPUT_DEVICES="libinput evdev joystick"
 
-cat > ${GENTOO_ROOT}/etc/portage/make.conf << EOF
+cat > "${GENTOO_ROOTDIR}/etc/portage/make.conf" << EOF
 # Please consult /usr/share/portage/config/make.conf.example for a more
 # detailed example.
 COMMON_FLAGS="-O2 -pipe -march=native"
@@ -12,7 +14,7 @@ CFLAGS="\${COMMON_FLAGS}"
 CXXFLAGS="\${COMMON_FLAGS}"
 FCFLAGS="\${COMMON_FLAGS}"
 FFLAGS="\${COMMON_FLAGS}"
-RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native"
+RUSTFLAGS="\${RUSTFLAGS} -C target-cpu=native"
 
 MAKEOPTS="-j$(nproc) -l$(expr $(nproc) + 1)"
 FEATURES="\${FEATURES} getbinpkg binpkg-request-signature candy parallel-fetch"
