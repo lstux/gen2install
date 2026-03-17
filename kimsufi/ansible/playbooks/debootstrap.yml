@@ -1,0 +1,12 @@
+---
+- name: Debootstrap Gentoo on fresh server
+  hosts: lslng.lslinux.org
+  become: false
+  user: root
+  var_files:
+    - vars/common.yml
+    - vars/lslng.yml
+
+  roles:
+    - role: disks_prepare
+      state: present
