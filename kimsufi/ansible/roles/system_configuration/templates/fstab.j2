@@ -1,0 +1,12 @@
+{{ disks[0] }}p1    /efi    vfat    umask=0077,tz=UTC 0 2
+{% if (disks | length > 1) -%}
+{% for disk in disks -%}
+{% if not loop.first -%}
+{{ disk }}p1    /efi{{ loop.index }}    vfat    umask=0077,tz=UTC 0 2
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% for lv in lvm_lvs -%}
+/dev/{{ lvm_vg }}/{{ lv.name }} {{ lv.mountpoint }} {{ lv.fs_type }}    {{ lv.options if lv.options is defined else "defaults" }}   0 {{ loop.index if loop.index < 2 else loop.index + 1 }}
+{% endfor %}

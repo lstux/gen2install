@@ -1,0 +1,61 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for system_configuration
+
+- name: Write down fstab
+  ansible.builtin.template:
+    src: "templates/fstab.j2"
+    dest: "{{ rootfs_mountpoint }}/etc/fstab"
+    mode: '0644'
+
+- name: Set hostname
+  ansible.builtin.lineinfile:
+    path: "{{ rootfs_mountpoint }}/etc/hostname"
+    line: "{{ hostname }}"
+    create: true
+    mode: '0644'
+
+- name: Install dhcpcd
+  ansible.builtin.command:
+    cmd: "chrootrun {{ rootfs_mountpoint }} emerge --update --newuse dhcpcd"
+
+- name: Enable dhcpcd service
+  ansible.builtin.command:
+    cmd: "chrootrun {{ rootfs_mountpoint }} {{ 'rc-update add dhcpcd default' if gentoo_init == 'openrc' else 'systemctl enable dhcpcd' }}"
+
+- name: Add root ssh authorized keys
+  ansible.builtin.lineinfile:
+    path: "{{ rootfs_mountpoint }}/root/.ssh/authorized_keys"
+    line: "{{ item }}"
+    create: true
+    mode: '0600'
+  loop: "{{ rootssh_pubkeys }}"
+
+- name: Install logger and cron daemons
+  ansible.builtin.command:
+    cmd: "chrootrun {{ rootfs_mountpoint }} emerge --update --newuse {{ syslogger }} {{ crondaemon }}"
+  when: gentoo_init == "openrc"
+
+- name: Enable logger and cron daemons
+  ansible.builtin.command:
+    cmd: "chrootrun {{ rootfs_mountpoint }} rc-update add {{ item }} default"
+  with_items:
+    - "{{ syslogger }}"
+    - "{{ crondaemon }}"
+  when: gentoo_init == "openrc"
+
+- name: Configure cron daemon
+  ansible.builtin.command:
+    cmd: "chrootrun {{ rootfs_mountpoint }} {{ 'crontab /etc/crontab' if crondaemon == 'dcron' else 'emerge --config sys-process/fcron' }}"
+  when: gentoo_init == "openrc" and crondaemon in ["dcron", "fcron"]
+
+- name: Install additional system tools
+  ansible.builtin.command:
+    cmd: "chrootrun {{ rootfs_mountpoint }} emerge --update --newuse sys-apps/mlocate app-shells/bash-completion net-misc/chrony dosfstools btrfs-progs"
+
+- name: Enable SSH/Chrony daemons
+  ansible.builtin.command:
+    cmd: "chrootrun {{ rootfs_mountpoint }} {{ 'rc-update add ' + item + ' default' if gentoo_init == 'openrc' else 'systemctl enable ' + item }}"
+  with_items:
+    - "sshd"
+    - "chronyd"

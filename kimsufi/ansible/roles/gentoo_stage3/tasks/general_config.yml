@@ -16,8 +16,6 @@
 
 - name: Generate locales
   ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} locale-gen"
-  args:
-    creates: "{{ rootfs_mountpoint }}/usr/lib/locale/locale-archive"
 
 - name: Set LANG environment variable
   ansible.builtin.lineinfile:
