@@ -58,7 +58,7 @@ echo "=== download stage3 ==="
 
 cd /mnt/gentoo
 
-STAGE3=$(curl -s https://distfiles.gentoo.org/releases/amd64/autobuilds/latest-stage3-amd64-openrc.txt | awk '{print $1}')
+STAGE3=$(curl -s https://distfiles.gentoo.org/releases/amd64/autobuilds/latest-stage3-amd64-openrc.txt | awk '/^202[0-9]/{print $1}')
 
 wget https://distfiles.gentoo.org/releases/amd64/autobuilds/$STAGE3
 
