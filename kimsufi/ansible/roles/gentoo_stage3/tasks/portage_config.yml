@@ -1,0 +1,33 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Create portage directory structure
+  ansible.builtin.file:
+    path: "{{ rootfs_mountpoint }}{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: 250 # portage group
+  with_items:
+    - "/etc/portage"
+    - "/etc/portage/binrepos.conf"
+    - "/etc/portage/package.use"
+    - "/etc/portage/package.accept_keywords"
+    - "/etc/portage/package.license"
+
+- name: Create portage make.conf
+  ansible.builtin.template:
+    src: make.conf.j2
+    dest: "{{ rootfs_mountpoint }}/etc/portage/make.conf"
+    mode: '0644'
+
+- name: Create gentoobinhost.conf
+  ansible.builtin.template:
+    src: gentoobinhost.conf.j2
+    dest: "{{ rootfs_mountpoint }}/etc/portage/binrepos.conf/gentoobinhost.conf"
+    mode: '0644'
+  when: binhost_variant is defined and binhost_variant != ""
+
+- name: Perform initial portage sync
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} emerge --sync && date /tmp/lastsync"
+  args:
+    creates: "{{ rootfs_mountpoint }}/var/db/repos/gentoo"

@@ -1,0 +1,9 @@
+#SPDX-License-Identifier: MIT-0
+---
+# vars file for gentoo_stage3
+
+gentoo_profile_suffix: "{{ '-' + gentoo_profile if gentoo_profile != 'default' }}"
+gentoo_init_suffix: "{{ '-' + gentoo_init if gentoo_init == 'systemd' else '-openrc' }}"
+stage3_filename_pattern: "latest-stage3-{{ gentoo_arch }}{{ gentoo_profile_suffix }}{{ gentoo_init_suffix }}.txt"
+stage3_url_path: "{{ gentoo_mirror }}/{{ gentoo_arch }}/autobuilds/{{ stage3_filename_pattern }}"
+

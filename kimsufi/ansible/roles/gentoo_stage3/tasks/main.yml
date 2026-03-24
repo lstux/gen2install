@@ -1,0 +1,13 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Include stage extraction tasks
+  ansible.builtin.include_tasks: stage_extract.yml
+
+- name: Include portage configuration tasks
+  ansible.builtin.include_tasks: portage_config.yml
+
+- name: Include general configuration tasks
+  ansible.builtin.include_tasks: general_config.yml
+
+- name: Install kernel
+  ansible.builtin.include_tasks: install_kernel_auto.yml

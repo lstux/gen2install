@@ -1,0 +1,29 @@
+---
+- name: Debootstrap Gentoo on fresh server
+  hosts: lslng.lslinux.org,
+  become: false
+  user: root
+
+  vars:
+    rootfs_mountpoint: "/mnt/gentoo"
+    disks:
+      - "/dev/nvme0n1"
+      - "/dev/nvme1n1"
+    partitions:
+      - { name: "boot", size: "1GiB", type: "primary", fs_type: "vfat" }
+      - { name: "lvmpv", size: "100%", type: "primary", fs_type: "lvm" }
+    lvm_vg: "gentoo_vg"
+    lvm_lvs:
+      - { name: "root", size: "20g", fs_type: "btrfs", mountpoint: "/" }
+      - { name: "home", size: "20g", fs_type: "btrfs", mountpoint: "/home" }
+      - { name: "tmpdata", size: "20g", fs_type: "btrfs", mountpoint: "/tmpdata" }
+
+  #var_files:
+  #  - vars/common.yml
+  #  - vars/lslng.yml
+
+  roles:
+    - role: disks_prepare
+      state: present
+    - role: gentoo_stage3
+      state: present

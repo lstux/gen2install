@@ -1,0 +1,39 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name : configure use flags
+  ansible.builtin.lineinfile:
+    path: "{{ rootfs_mountpoint }}/etc/portage/package.use/{{ item.name | basename }}"
+    regexp: "^{{ item.name }}"
+    line: "{{ item.name }} {{ item.use }}"
+    create: true
+  with_items:
+    - { name: "sys-kernel/installkernel", use: "grub dracut" }
+
+- name: Install installkernel
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} emerge sys-kernel/installkernel"
+  args:
+    creates: "{{ rootfs_mountpoint }}/usr/bin/installkernel"
+
+- name: Create EFI boot directory and dracut subconfiguration directory
+  ansible.builtin.file:
+    path: "{{ rootfs_mountpoint }}{{ item }}"
+    state: directory
+    mode: '0755'
+  with_items:
+    - "/efi/EFI/Gentoo"
+    - "/etc/dracut.conf.d"
+
+- name: Get root partition UUID
+  ansible.builtin.command: "blkid -s UUID -o value /dev/mapper/{{ lvm_vg }}-root"
+  register: root_partition_uuid
+
+- name: Configure dracut
+  ansible.builtin.copy:
+    dest: "{{ rootfs_mountpoint }}/etc/dracut.conf.d/00-installkernel.conf"
+    content: |
+      kernel_cmdline=" root=UUID={{ root_partition_uuid.stdout }} "
+    mode: '0644'
+
+- name: Install gentoo-kernel-bin
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} emerge gentoo-kernel-bin"
+

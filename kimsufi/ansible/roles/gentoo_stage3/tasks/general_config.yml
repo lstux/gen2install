@@ -1,0 +1,27 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Set timezone
+  ansible.builtin.file:
+    src: "/usr/share/zoneinfo/{{ timezone }}"
+    dest: "{{ rootfs_mountpoint }}/etc/localtime"
+    state: link
+    force: true
+
+- name: Configure locale.gen
+  ansible.builtin.lineinfile:
+    path: "{{ rootfs_mountpoint }}/etc/locale.gen"
+    line: "{{ item }}"
+    state: present
+  with_items: "{{ locales }}"
+
+- name: Generate locales
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} locale-gen"
+  args:
+    creates: "{{ rootfs_mountpoint }}/usr/lib/locale/locale-archive"
+
+- name: Set LANG environment variable
+  ansible.builtin.lineinfile:
+    path: "{{ rootfs_mountpoint }}/etc/env.d/02locale"
+    line: "LANG=\"{{ locales[0] }}\""
+    create: true
+    mode: '0644'

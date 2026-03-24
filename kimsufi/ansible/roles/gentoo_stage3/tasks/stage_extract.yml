@@ -1,0 +1,41 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Check if stage3 was already extracted
+  ansible.builtin.stat:
+    path: "{{ rootfs_mountpoint }}/etc/gentoo-release"
+  register: gentoo_release_stat
+
+- name: Debug stage3 extraction status
+  ansible.builtin.debug:
+    msg: "Stage3 already extracted! Skipping download and extraction."
+  when: gentoo_release_stat.stat.exists
+
+- name: Get latest stage3 URL
+  ansible.builtin.shell:
+    cmd: "curl -o - -s {{ stage3_url_path }} | awk '/tar\\.xz/{print $1}'"
+  register: stage3_latest_response
+  when: not gentoo_release_stat.stat.exists
+
+- name: Download stage3 tarball
+  ansible.builtin.get_url:
+    url: "{{ gentoo_mirror }}/{{ gentoo_arch }}/autobuilds/{{ stage3_latest_response.stdout }}"
+    dest: "{{ rootfs_mountpoint }}/{{ stage3_latest_response.stdout | basename }}"
+    mode: '0644'
+  register: stage3_download
+  when: not gentoo_release_stat.stat.exists
+
+- name: Extract stage3 tarball
+  ansible.builtin.unarchive:
+    src: "{{ rootfs_mountpoint }}/{{ stage3_latest_response.stdout | basename }}"
+    dest: "{{ rootfs_mountpoint }}"
+    remote_src: yes
+    extra_opts:
+      - "--xattrs-include=*.*"
+      - "--numeric-owner"
+  when: stage3_download.changed
+
+- name: Install chrootrun script
+  ansible.builtin.copy:
+    src: chrootrun.sh
+    dest: "/usr/local/bin/chrootrun"
+    mode: '0755'

@@ -1,0 +1,27 @@
+#SPDX-License-Identifier: MIT-0
+---
+# defaults file for gentoo_stage3
+gentoo_mirror: "https://distfiles.gentoo.org/releases"
+gentoo_arch: "amd64"
+gentoo_init: "openrc"  # openrc or systemd
+gentoo_profile: "default"  # default, desktop, hardened, or nomultilib
+rootfs_mountpoint: "/mnt/gentoo"
+lvm_vg: "gentoo_vg"
+
+# Portage configuration
+common_flags: "-march=native -O2 -pipe"
+makeopts: "-j{{ ansible_processor_vcpus }} -l{{ ansible_processor_vcpus | int + 1 }}"
+features: "candy parallel-fetch"
+video_cards: ""
+input_devices: "libinput evdev"
+use_flags: "bindist dist-kernel lvm"
+accept_license: "-* @FREE @BINARY-REDISTRIBUTABLE"
+# Leave to "" to NOT use binpackages, "x86-64-v3" for newer hardware with AVX2 support, "x86-64" else
+binhost_variant: "x86-64-v3" 
+
+# General configuration
+timezone: "Europe/Paris"
+# Default locale is the first one in the list.
+locales:
+  - en_US.UTF-8 UTF-8
+  - fr_FR.UTF-8 UTF-8

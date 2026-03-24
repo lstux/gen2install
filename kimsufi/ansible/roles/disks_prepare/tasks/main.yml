@@ -1,0 +1,177 @@
+---
+- name: Assert disks list is defined
+  ansible.builtin.assert:
+    that:
+      - disks is defined
+      - disks | length > 0
+
+- name: Install required packages
+  ansible.builtin.package:
+    name:
+      - lvm2
+      - mdadm
+      - parted
+    state: present
+
+# -------------------------
+# OPTIONAL WIPE
+# -------------------------
+- name: Wipe filesystem signatures
+  ansible.builtin.command: "wipefs -a {{ item }}"
+  loop: "{{ disks }}"
+  when: wipe_disks
+  changed_when: true
+
+- name: Wipe partition table (sgdisk)
+  ansible.builtin.command: "sgdisk --zap-all {{ item }}"
+  loop: "{{ disks }}"
+  when: wipe_disks
+  changed_when: true
+
+# -------------------------
+# PARTITIONING
+# -------------------------
+- name: Create EFI partition
+  ansible.builtin.parted:
+    device: "{{ item }}"
+    number: 1
+    label: gpt
+    part_start: "1MiB"
+    part_end: "{{ partitions[0].size }}"
+    name: "{{ partitions[0].name }}"
+    flags: [ boot, esp ]
+    state: present
+  loop: "{{ disks }}"
+
+- name: Create LVM partition
+  ansible.builtin.parted:
+    device: "{{ item }}"
+    number: 2
+    label: gpt
+    part_start: "{{ partitions[0].size }}"
+    part_end: "100%"
+    name: "{{ partitions[1].name }}"
+    flags: [ lvm ]
+    state: present
+  loop: "{{ disks }}"
+
+# -------------------------
+# BUILD PARTITION PATHS
+# -------------------------
+- name: Build partition paths
+  ansible.builtin.set_fact:
+    boot_parts: "{{ disks | map('regex_replace', '$', 'p1') | list }}"
+    lvmpv_parts: "{{ disks | map('regex_replace', '$', 'p2') | list }}"
+
+# -------------------------
+# FORMAT BOOT
+# -------------------------
+- name: Format boot partitions
+  ansible.builtin.filesystem:
+    fstype: "{{ partitions[0].fs_type }}"
+    dev: "{{ item }}"
+  loop: "{{ boot_parts }}"
+
+# -------------------------
+# RAID SETUP
+# -------------------------
+- name: Determine RAID level
+  ansible.builtin.set_fact:
+    raid_level: >-
+      {{ '1' if disks | length == 2 else
+         '5' if disks | length > 2 else
+         '0' }}
+
+- name: Stop existing RAID (if wiping)
+  ansible.builtin.command: "mdadm --stop /dev/md0"
+  when: wipe_disks
+  failed_when: false
+  changed_when: false
+
+- name: Create RAID
+  ansible.builtin.command: "mdadm --create /dev/md0 --force --run --level={{ raid_level }} --raid-devices={{ disks | length }} {{ lvmpv_parts | join(' ') }}"
+  args:
+    creates: /dev/md0
+  when: raid_level != "0"
+
+# -------------------------
+# DEFINE LVM DEVICE
+# -------------------------
+- name: Set LVM PV device
+  ansible.builtin.set_fact:
+    lvm_pv_device: >-
+      {{ '/dev/md0' if (disks | length > 1) else lvmpv_parts[0] }}
+
+# -------------------------
+# CREATE PV / VG
+# -------------------------
+- name: Ensure PV exists
+  ansible.builtin.command: "pvcreate -ff -y {{ lvm_pv_device }}"
+  when: wipe_disks
+  changed_when: true
+
+- name: Create volume group
+  ansible.builtin.lvg:
+    vg: "{{ lvm_vg }}"
+    pvs: "{{ lvm_pv_device }}"
+
+# -------------------------
+# LOGICAL VOLUMES
+# -------------------------
+- name: Create logical volumes
+  ansible.builtin.lvol:
+    vg: "{{ lvm_vg }}"
+    lv: "{{ item.name }}"
+    size: "{{ item.size }}"
+    shrink: false
+    state: present
+  loop: "{{ lvm_lvs }}"
+
+# -------------------------
+# FILESYSTEMS
+# -------------------------
+- name: Format logical volumes
+  ansible.builtin.filesystem:
+    fstype: "{{ item.fs_type }}"
+    dev: "/dev/{{ lvm_vg }}/{{ item.name }}"
+  loop: "{{ lvm_lvs }}"
+
+# -------------------------
+# MOUNT
+# -------------------------
+- name: Ensure mount directories exist
+  ansible.builtin.file:
+    path: "{{ rootfs_mountpoint }}"
+    state: directory
+    mode: "0755"
+  when: rootfs_mountpoint is defined
+
+- name: Mount Logical volumes
+  ansible.builtin.mount:
+    path: "{{ rootfs_mountpoint}}{{ item.mountpoint }}"
+    src: "/dev/{{ lvm_vg }}/{{ item.name }}"
+    fstype: "{{ item.fs_type }}"
+    opts: defaults
+    state: mounted
+  loop: "{{ lvm_lvs }}"
+  when: item.mountpoint is defined
+
+- name: Mount EFI partition
+  ansible.builtin.mount:
+    path: "{{ rootfs_mountpoint }}/efi"
+    src: "{{ boot_parts[0] }}"
+    fstype: "vfat"
+    opts: defaults
+    state: mounted
+
+- name: Mount remaining EFI partitions (if RAID1)
+  ansible.builtin.mount:
+    path: "{{ rootfs_mountpoint }}/efi{{ bootindex + 2}}"
+    src: "{{ item }}"
+    fstype: "vfat"
+    opts: defaults
+    state: mounted
+  loop: "{{ boot_parts[1:] }}"
+  loop_control:
+    index_var: bootindex
+  when: boot_parts | length > 1

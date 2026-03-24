@@ -1,0 +1,11 @@
+[gentoo]
+priority = 9959
+# NOTE: Must adjust <arch> and <variant> as appropriate!
+sync-uri = {{ gentoo_mirror }}/{{ gentoo_arch }}/binpackages/{{ binhost_variant }}/
+# x86-64 example sync-uri
+# sync-uri = https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/
+
+# Introduced in portage-3.0.74 for per-repo verification choices
+verify-signature = true
+# Default value with >=portage-3.0.77
+location = /var/cache/binhost/gentoo-{{ binhost_variant }}
