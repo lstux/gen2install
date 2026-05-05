@@ -1,0 +1,36 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for bootloader
+
+- name: Install GRUB
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} emerge --update --newuse sys-boot/grub"
+
+- name: Install bootloader to disk
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} grub-install --efi-directory=/efi"
+
+- name: Setup GRUB options
+  ansible.builtin.lineinfile:
+    path: "{{ rootfs_mountpoint }}/etc/default/grub"
+    regexp: '^#?{{ item.key }}='
+    line: '{{ item.key }}="{{ item.value }}"'
+  with_items:
+    - { key: "GRUB_CMDLINE_LINUX", value: "net.ifnames=0 dolvm{{ ' domdadm' if disks | length > 1 else '' }}" }
+    - { key: "GRUB_PRELOAD_MODULES", value: "lvm mdraid1x btrfs ext2" }
+    - { key: "GRUB_DISABLE_OS_PROBER", value: "true" }
+
+- name: Generate GRUB configuration
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} grub-mkconfig -o /boot/grub/grub.cfg"
+
+- name: Synchronize additional EFI partitions
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} rsync -a --delete /efi/ /efi{{ bootindex + 2 }}/"
+  loop: "{{ disks[1:] }}"
+  loop_control:
+    index_var: bootindex
+  when: disks | length > 1
+
+- name: Synchronize additional boot partitions
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} rsync -a --delete /boot/ /boot{{ bootindex + 2 }}/"
+  loop: "{{ disks[1:] }}"
+  loop_control:
+    index_var: bootindex
+  when: disks | length > 1
