@@ -43,14 +43,26 @@
     state: present
   loop: "{{ disks }}"
 
-- name: Create LVM partition
+- name: Create boot partition
   ansible.builtin.parted:
     device: "{{ item }}"
     number: 2
     label: gpt
     part_start: "{{ partitions[0].size }}"
-    part_end: "100%"
+    part_end: "{{ partitions[1].size }}"
     name: "{{ partitions[1].name }}"
+    flags: [ boot, esp ]
+    state: present
+  loop: "{{ disks }}"
+
+- name: Create LVM partition
+  ansible.builtin.parted:
+    device: "{{ item }}"
+    number: 3
+    label: gpt
+    part_start: "{{ partitions[1].size }}"
+    part_end: "100%"
+    name: "{{ partitions[2].name }}"
     flags: [ lvm ]
     state: present
   loop: "{{ disks }}"
@@ -60,15 +72,22 @@
 # -------------------------
 - name: Build partition paths
   ansible.builtin.set_fact:
-    boot_parts: "{{ disks | map('regex_replace', '$', 'p1') | list }}"
-    lvmpv_parts: "{{ disks | map('regex_replace', '$', 'p2') | list }}"
+    efi_parts: "{{ disks | map('regex_replace', '$', 'p1') | list }}"
+    boot_parts: "{{ disks | map('regex_replace', '$', 'p2') | list }}"
+    lvmpv_parts: "{{ disks | map('regex_replace', '$', 'p3') | list }}"
 
 # -------------------------
 # FORMAT BOOT
 # -------------------------
-- name: Format boot partitions
+- name: Format EFI partitions
   ansible.builtin.filesystem:
     fstype: "{{ partitions[0].fs_type }}"
+    dev: "{{ item }}"
+  loop: "{{ efi_parts }}"
+
+- name: Format boot partitions
+  ansible.builtin.filesystem:
+    fstype: "{{ partitions[1].fs_type }}"
     dev: "{{ item }}"
   loop: "{{ boot_parts }}"
 
@@ -156,22 +175,42 @@
   loop: "{{ lvm_lvs }}"
   when: item.mountpoint is defined
 
-- name: Mount EFI partition
+- name: Mount boot partition
   ansible.builtin.mount:
-    path: "{{ rootfs_mountpoint }}/efi"
+    path: "{{ rootfs_mountpoint }}/boot"
     src: "{{ boot_parts[0] }}"
-    fstype: "vfat"
+    fstype: "ext2"
     opts: defaults
     state: mounted
 
-- name: Mount remaining EFI partitions (if RAID1)
+- name: Mount remaining boot partitions (if RAID1)
   ansible.builtin.mount:
-    path: "{{ rootfs_mountpoint }}/efi{{ bootindex + 2}}"
+    path: "{{ rootfs_mountpoint }}/boot{{ bootindex + 2 }}"
     src: "{{ item }}"
-    fstype: "vfat"
+    fstype: "ext2"
     opts: defaults
     state: mounted
   loop: "{{ boot_parts[1:] }}"
   loop_control:
     index_var: bootindex
   when: boot_parts | length > 1
+
+- name: Mount EFI partition
+  ansible.builtin.mount:
+    path: "{{ rootfs_mountpoint }}/efi"
+    src: "{{ efi_parts[0] }}"
+    fstype: "vfat"
+    opts: defaults
+    state: mounted
+
+- name: Mount remaining EFI partitions (if RAID1)
+  ansible.builtin.mount:
+    path: "{{ rootfs_mountpoint }}/efi{{ bootindex + 2 }}"
+    src: "{{ item }}"
+    fstype: "vfat"
+    opts: defaults
+    state: mounted
+  loop: "{{ efi_parts[1:] }}"
+  loop_control:
+    index_var: bootindex
+  when: efi_parts | length > 1

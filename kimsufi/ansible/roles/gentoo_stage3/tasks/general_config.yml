@@ -20,6 +20,6 @@
 - name: Set LANG environment variable
   ansible.builtin.lineinfile:
     path: "{{ rootfs_mountpoint }}/etc/env.d/02locale"
-    line: "LANG=\"{{ locales[0] }}\""
+    line: "LANG=\"{{ locales[0] | split(' ') | first }}\""
     create: true
     mode: '0644'

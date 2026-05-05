@@ -8,7 +8,8 @@ disks:
   - "/dev/nvme0n1"
   - "/dev/nvme1n1"
 partitions:
-  - { name: "boot", size: "1GiB", type: "primary", fs_type: "vfat" }
+  - { name: "efi", size: "256MiB", type: "primary", fs_type: "vfat" }
+  - { name: "boot", size: "1GiB", type: "primary", fs_type: "ext4" }
   - { name: "lvmpv", size: "100%", type: "primary", fs_type: "lvm" }
 lvm_vg: "gentoo_vg"
 lvm_lvs:

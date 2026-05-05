@@ -2,6 +2,10 @@
 ---
 # tasks file for system_configuration
 
+- name: Install lvm/mdadm tools
+  ansible.builtin.command:
+    cmd: "chrootrun {{ rootfs_mountpoint }} emerge --update --newuse lvm2{{ ' mdadm' if disks | length > 1 else '' }}"
+
 - name: Write down fstab
   ansible.builtin.template:
     src: "templates/fstab.j2"
@@ -51,7 +55,7 @@
 
 - name: Install additional system tools
   ansible.builtin.command:
-    cmd: "chrootrun {{ rootfs_mountpoint }} emerge --update --newuse sys-apps/mlocate app-shells/bash-completion net-misc/chrony dosfstools btrfs-progs"
+    cmd: "chrootrun {{ rootfs_mountpoint }} emerge --update --newuse sys-apps/mlocate app-shells/bash-completion net-misc/chrony dosfstools btrfs-progs gentoolkit"
 
 - name: Enable SSH/Chrony daemons
   ansible.builtin.command:

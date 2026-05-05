@@ -8,7 +8,7 @@ FFLAGS="${COMMON_FLAGS}"
 RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native"
 
 MAKEOPTS="{{ makeopts }}"
-FEATURES="${FEATURES} {{ "getbinpkg binpkg-request-signatures" if (binhost_variant is defined and binhost_variant != "") else "" }}{{ features }}"
+FEATURES="${FEATURES} {{ "getbinpkg binpkg-request-signatures " if (binhost_variant is defined and binhost_variant != "") else "" }}{{ features }}"
 VIDEO_CARDS="{{ video_cards }}"
 INPUT_DEVICES="{{ input_devices }}"
 

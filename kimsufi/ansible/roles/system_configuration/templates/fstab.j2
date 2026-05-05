@@ -6,7 +6,15 @@
 {% endif %}
 {% endfor %}
 {% endif %}
+{{ disks[0] }}p2    /boot    ext2    defaults 0 3
+{% if (disks | length > 1) -%}
+{% for disk in disks -%}
+{% if not loop.first -%}
+{{ disk }}p2    /boot{{ loop.index }}    ext2    defaults 0 3
+{% endif %}
+{% endfor %}
+{% endif %}
 
 {% for lv in lvm_lvs -%}
-/dev/{{ lvm_vg }}/{{ lv.name }} {{ lv.mountpoint }} {{ lv.fs_type }}    {{ lv.options if lv.options is defined else "defaults" }}   0 {{ loop.index if loop.index < 2 else loop.index + 1 }}
+/dev/{{ lvm_vg }}/{{ lv.name }} {{ lv.mountpoint }} {{ lv.fs_type }}    {{ lv.options if lv.options is defined else "defaults" }}   0 {{ loop.index if loop.index < 2 else loop.index + 2 }}
 {% endfor %}
