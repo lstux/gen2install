@@ -1,0 +1,9 @@
+# /etc/mysql/mariadb.conf.d/60-nextcloud.cnf
+# Reglages issus du conseiller serverinfo de Nextcloud (16 Go de RAM, base ~450 Mo).
+[mysqld]
+innodb_buffer_pool_size_max = 2G
+innodb_buffer_pool_size = 1G
+innodb_log_file_size    = 256M
+tmp_table_size          = 64M
+max_heap_table_size     = 64M
+max_allowed_packet      = 64M

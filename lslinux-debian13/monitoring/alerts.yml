@@ -1,0 +1,33 @@
+groups:
+  - name: lslng
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "{{ $labels.job }} ne repond plus"}
+      - alert: DiskSpaceLow
+        expr: node_filesystem_avail_bytes{fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{fstype=~"ext4|xfs|btrfs"} < 0.15
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "{{ $labels.mountpoint }} : moins de 15% libre"}
+      - alert: MemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Memoire disponible < 10%"}
+      - alert: MariaDBDown
+        expr: mysql_up == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "MariaDB injoignable"}
+      - alert: NvmeCriticalWarning
+        expr: nvme_critical_warning > 0 or increase(nvme_media_errors_total[1d]) > 0
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "NVMe {{ $labels.device }} : avertissement critique ou erreurs media"}
+      - alert: NvmeWearHigh
+        expr: nvme_percentage_used_ratio > 0.8 or nvme_available_spare_ratio < 0.2
+        for: 1h
+        labels: {severity: warning}
+        annotations: {summary: "NVMe {{ $labels.device }} : usure elevee ou spare faible"}

@@ -1,0 +1,25 @@
+# nginx access.log (format combined) -> metriques par fichier de log (= un fichier par vhost)
+counter weblog_requests_total by logfile, status, method
+counter weblog_bytes_total by logfile
+counter weblog_paths_total by logfile, path
+counter weblog_clients_total by logfile, kind
+
+/^(?P<remote>\S+) - (?P<user>\S+) \[[^\]]+\] "(?P<method>[A-Z]+) (?P<path>\/[^\/? ]*)\S* [^"]*" (?P<status>\d{3}) (?P<bytes>\d+) "[^"]*" "(?P<agent>[^"]*)"/ {
+  weblog_requests_total[getfilename()][$status][$method]++
+  weblog_bytes_total[getfilename()] += $bytes
+
+  # Premier segment du chemin seulement, et seulement pour les 2xx/3xx : evite l'explosion des series sous les scanners.
+  $status =~ /^[23]/ {
+    weblog_paths_total[getfilename()][$path]++
+  }
+
+  $agent =~ /(?i:bot|crawl|spider|slurp|scan)/ {
+    weblog_clients_total[getfilename()]["bot"]++
+  } else {
+    $agent =~ /mirall|Nextcloud|DAVx5|davfs/ {
+      weblog_clients_total[getfilename()]["nextcloud"]++
+    } else {
+      weblog_clients_total[getfilename()]["autre"]++
+    }
+  }
+}

@@ -1,0 +1,17 @@
+global:
+  smtp_smarthost: 'localhost:25'
+  smtp_from: 'alertmanager@lslinux.org'
+  smtp_require_tls: false
+
+route:
+  receiver: mail
+  group_by: ['alertname']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+
+receivers:
+  - name: mail
+    email_configs:
+      - to: 'webadm@laposte.net'
+        send_resolved: true
