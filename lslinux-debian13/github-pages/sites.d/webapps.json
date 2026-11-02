@@ -1,0 +1,11 @@
+{
+  "repo": "https://github.com/lstux/WebApps",
+  "branch": "main",
+  "build": [
+    "python3 build.py --pwa"
+  ],
+  "output": "dist",
+  "title": "WebApps",
+  "desc": "Petits outils web, installables, hors ligne",
+  "icon": "🧰"
+}

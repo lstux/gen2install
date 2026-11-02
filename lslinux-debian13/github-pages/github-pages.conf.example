@@ -1,0 +1,3 @@
+# Copie ce fichier en github-pages.conf (a cote de publish.sh) et adapte.
+# Dossier local ou seront publies les sites : <DEST>/<name>/index.html
+DEST="${HOME}/github-pages-sites"
