@@ -150,7 +150,7 @@ WantedBy=timers.target
 TMR
 
 # Rapports DMARC (boite el@ruedesrancy.org) -> archive XML 30 j + collecteur textfile, 1x/heure.
-# Lit le Maildir en root (doveadm pour la purge optionnelle). Purge desactivee par defaut.
+# Lit le Maildir en root (doveadm pour la purge des messages archives, DMARC_PURGE=1).
 install -m 0750 $M/dmarc-textfile.py /usr/local/sbin/dmarc-textfile
 cat > /etc/systemd/system/dmarc-textfile.service <<SVC
 [Unit]
@@ -158,6 +158,7 @@ Description=Rapports DMARC -> metriques node-exporter
 
 [Service]
 Type=oneshot
+Environment=DMARC_PURGE=1
 ExecStart=/usr/local/sbin/dmarc-textfile
 SVC
 cat > /etc/systemd/system/dmarc-textfile.timer <<TMR
