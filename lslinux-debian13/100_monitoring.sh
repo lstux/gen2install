@@ -148,6 +148,29 @@ OnUnitActiveSec=1min
 [Install]
 WantedBy=timers.target
 TMR
+
+# Rapports DMARC (boite el@ruedesrancy.org) -> archive XML 30 j + collecteur textfile, 1x/heure.
+# Lit le Maildir en root (doveadm pour la purge optionnelle). Purge desactivee par defaut.
+install -m 0750 $M/dmarc-textfile.py /usr/local/sbin/dmarc-textfile
+cat > /etc/systemd/system/dmarc-textfile.service <<SVC
+[Unit]
+Description=Rapports DMARC -> metriques node-exporter
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dmarc-textfile
+SVC
+cat > /etc/systemd/system/dmarc-textfile.timer <<TMR
+[Unit]
+Description=Rapports DMARC toutes les heures
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target
+TMR
 systemctl daemon-reload
 rm -rf $M
 REMOTE
@@ -173,7 +196,7 @@ REMOTE
 reload() {
   ${SUSSH} "sh -s" <<'REMOTE' || exit 1
 set -e
-systemctl enable --now mtail fail2ban-textfile.timer
+systemctl enable --now mtail fail2ban-textfile.timer dmarc-textfile.timer
 systemctl reload prometheus
 systemctl restart prometheus-alertmanager
 systemctl restart grafana-server

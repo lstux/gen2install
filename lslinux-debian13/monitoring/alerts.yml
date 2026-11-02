@@ -31,3 +31,20 @@ groups:
         for: 1h
         labels: {severity: warning}
         annotations: {summary: "NVMe {{ $labels.device }} : usure elevee ou spare faible"}
+      - alert: DmarcParseFailed
+        expr: dmarc_parse_ok == 0
+        for: 2h
+        labels: {severity: warning}
+        annotations: {summary: "dmarc-textfile en erreur (voir journal de dmarc-textfile.service)"}
+      - alert: DmarcNoReport
+        expr: time() - max by (domain) (dmarc_last_report_timestamp_seconds) > 3 * 86400
+        for: 1h
+        labels: {severity: warning}
+        annotations: {summary: "Aucun rapport DMARC pour {{ $labels.domain }} depuis plus de 3 jours"}
+      - alert: DmarcFailureRate
+        expr: |
+          sum by (domain) (dmarc_messages{dmarc="fail"}) / sum by (domain) (dmarc_messages) > 0.05
+          and sum by (domain) (dmarc_messages) > 20
+        for: 1h
+        labels: {severity: warning}
+        annotations: {summary: "DMARC : plus de 5% de messages non alignes pour {{ $labels.domain }} (fenetre 7 j)"}
