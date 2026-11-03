@@ -37,5 +37,8 @@
 - name: Install chrootrun script
   ansible.builtin.copy:
     src: chrootrun.sh
-    dest: "/usr/local/bin/chrootrun"
+    dest: "{{ item }}/usr/local/bin/chrootrun"
     mode: '0755'
+  with_items:
+    - "{{ rootfs_mountpoint }}"
+    - ""

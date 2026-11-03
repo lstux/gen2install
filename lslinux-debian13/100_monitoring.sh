@@ -148,6 +148,29 @@ OnUnitActiveSec=1min
 [Install]
 WantedBy=timers.target
 TMR
+
+# MAJ Nextcloud (core + apps) -> collecteur textfile, 1x/jour. Les paquets Debian
+# sont couverts par prometheus-node-exporter-apt (apt.prom), pas de doublon.
+install -m 0750 $M/nextcloud-updates-textfile.sh /usr/local/sbin/nextcloud-updates-textfile
+cat > /etc/systemd/system/nextcloud-updates-textfile.service <<SVC
+[Unit]
+Description=Metriques MAJ Nextcloud pour node-exporter
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nextcloud-updates-textfile
+SVC
+cat > /etc/systemd/system/nextcloud-updates-textfile.timer <<TMR
+[Unit]
+Description=Metriques MAJ Nextcloud chaque jour
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1d
+
+[Install]
+WantedBy=timers.target
+TMR
 systemctl daemon-reload
 rm -rf $M
 REMOTE
@@ -173,7 +196,7 @@ REMOTE
 reload() {
   ${SUSSH} "sh -s" <<'REMOTE' || exit 1
 set -e
-systemctl enable --now mtail fail2ban-textfile.timer
+systemctl enable --now mtail fail2ban-textfile.timer nextcloud-updates-textfile.timer
 systemctl reload prometheus
 systemctl restart prometheus-alertmanager
 systemctl restart grafana-server

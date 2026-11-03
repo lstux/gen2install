@@ -28,7 +28,7 @@
 
 set -u
 
-OLD_SSH_TARGET="root@www.lslinux.org"
+OLD_SSH_TARGET="root@genserv.lslinux.org"
 OLD_VMAIL_BASE="/var/spool/vmail"
 NEW_VMAIL_BASE="/var/lib/vmail/vhosts"
 CUTOVER_DIR="/var/lib/vmail/.cutover"

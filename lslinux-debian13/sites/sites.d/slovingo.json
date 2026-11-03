@@ -1,0 +1,13 @@
+{
+  "repo": "https://github.com/lstux/Slovingo",
+  "branch": "main",
+  "build": [
+    "mkdir -p content",
+    "for code in $(python3 -c \"import json;print(' '.join(json.load(open('launcher/course-ids.json'))['courses']))\"); do git clone -q --depth 1 --branch main https://github.com/lstux/Slovingo-$code content/$code || echo \"cours ignore : $code\"; done",
+    "python3 src/build_site.py --content-root content --launcher-dir launcher --static-dir static --base-path / --out _site"
+  ],
+  "output": "_site",
+  "title": "Slovingo",
+  "desc": "Apprendre une langue, sans appli ni compte",
+  "icon": "🦊"
+}

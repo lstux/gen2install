@@ -6,18 +6,21 @@
 
   vars:
     hostname: "lslng"
+    #wipe_disks: true
     disks:
       - "/dev/nvme0n1"
       - "/dev/nvme1n1"
     partitions:
-      - { name: "boot", size: "1GiB", type: "primary", fs_type: "vfat" } # Mandatory EFI partition
-      - { name: "lvmpv", size: "100%", type: "primary", fs_type: "lvm" } # Mandatory LVM PV partition
+      - { name: "efi",   size: 512,    type: "primary", fs_type: "vfat" } # Mandatory EFI partition
+      - { name: "boot",  size: 1024,   type: "primary", fs_type: "ext4" } # Mandatory Boot partition
+      - { name: "lvmpv", size: "100%", type: "primary", fs_type: "lvm" }  # Mandatory LVM PV partition
     lvm_vg: "gentoo_vg" # Volume group name for LVM
     lvm_lvs:
       - { name: "root", size: "20g", fs_type: "btrfs", mountpoint: "/" } # Mandatory root LV
       - { name: "home", size: "20g", fs_type: "btrfs", mountpoint: "/home" }
       - { name: "tmpdata", size: "20g", fs_type: "btrfs", mountpoint: "/tmpdata" }
     rootfs_mountpoint: "/mnt/gentoo"
+    locales: [ "en_US.UTF-8", "fr_FR.UTF-8" ]
 
 
   #var_files:
@@ -33,4 +36,7 @@
       tags: [stage3]
     - role: system_configuration
       state: present
-      tags: [system]
+      tags: [sysconfig]
+    - role: bootloader
+      state: present
+      tags: [bootloader]

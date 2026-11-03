@@ -4,9 +4,13 @@ WORKDIR="$(dirname "${0}")"
 
 usage() {
   exec >&2
-  printf "Usage : %s {backup|restore|status}\n" "$(basename "${0}")"
-  printf "  Backup/Restore certbot DNS-01 (hooks + acme_txt.sh + certificat lslinux) sur lslng\n"
-  printf "  NB: acme_txt.sh doit aussi etre pose en /root/acme_txt.sh sur genserv (hors scope de ce script, genserv n'est pas gere via server.conf)\n"
+  printf "Usage : %s {backup|restore|hooks|status}\n" "$(basename "${0}")"
+  printf "  backup  : archive certificat lslinux, hooks, acme_txt.sh (data/certbot_etc_AAAAMMJJ.tgz)\n"
+  printf "  restore : extrait l'archive, puis reinstalle les hooks depuis ce dossier\n"
+  printf "  hooks   : installe acme_txt.sh, les hooks DNS-01 (auth/cleanup) et les hooks de deploiement\n"
+  printf "            (permissions ssl-cert, reload postfix/dovecot/nginx) depuis ce dossier\n"
+  printf "  status  : certbot certificates\n"
+  printf "  Validation DNS-01 par delegation : le TXT est ecrit dans acme.lslinux.org (lslng seul), genserv n'intervient plus.\n"
 }
 
 backup() {
@@ -23,10 +27,26 @@ backup() {
   ln -sf "certbot_etc_${d}.tgz" "${WORKDIR}/data/certbot_etc.tgz"
 }
 
+# Les sources du dossier font foi (ce sont les versions deployees) : elles remplacent
+# ce que contient l'archive. Les hooks de deploiement sont executes par certbot apres
+# chaque renouvellement (ordre alphabetique).
+hooks() {
+  for f in acme_txt.sh certbot_auth_hook.sh certbot_cleanup_hook.sh \
+           certbot_deploy_10-ssl-cert-group.sh certbot_deploy_99-services-reload.sh; do
+    [ -f "${WORKDIR}/${f}" ] || { printf "Source manquante : %s/%s\n" "${WORKDIR}" "${f}" >&2; exit 1; }
+  done
+  ${SUSSH} "install -d -m 0755 -o root -g root /etc/letsencrypt/hooks /etc/letsencrypt/renewal-hooks/deploy" || exit 1
+  cat "${WORKDIR}/acme_txt.sh" | ${SSH} "sudo tee /root/acme_txt.sh >/dev/null && sudo chmod 0755 /root/acme_txt.sh" || exit 1
+  cat "${WORKDIR}/certbot_auth_hook.sh" | ${SSH} "sudo tee /etc/letsencrypt/hooks/auth.sh >/dev/null && sudo chmod 0755 /etc/letsencrypt/hooks/auth.sh" || exit 1
+  cat "${WORKDIR}/certbot_cleanup_hook.sh" | ${SSH} "sudo tee /etc/letsencrypt/hooks/cleanup.sh >/dev/null && sudo chmod 0755 /etc/letsencrypt/hooks/cleanup.sh" || exit 1
+  cat "${WORKDIR}/certbot_deploy_10-ssl-cert-group.sh" | ${SSH} "sudo tee /etc/letsencrypt/renewal-hooks/deploy/10-ssl-cert-group.sh >/dev/null && sudo chmod 0750 /etc/letsencrypt/renewal-hooks/deploy/10-ssl-cert-group.sh" || exit 1
+  cat "${WORKDIR}/certbot_deploy_99-services-reload.sh" | ${SSH} "sudo tee /etc/letsencrypt/renewal-hooks/deploy/99-services-reload.sh >/dev/null && sudo chmod 0750 /etc/letsencrypt/renewal-hooks/deploy/99-services-reload.sh" || exit 1
+  ${SSH} "sudo ls -l /root/acme_txt.sh /etc/letsencrypt/hooks /etc/letsencrypt/renewal-hooks/deploy"
+}
+
 restore() {
   cat "${WORKDIR}/data/certbot_etc.tgz" | ${SSH} "sudo tar xvzpf - -C /"
-  ${SUSSH} "chmod +x /root/acme_txt.sh /etc/letsencrypt/hooks/auth.sh /etc/letsencrypt/hooks/cleanup.sh"
-  printf "\n=> Pense a poser /root/acme_txt.sh (ACME_ZONEDIR=/var/bind/pri) en root sur genserv aussi.\n"
+  hooks
   printf "=> Ready! ${SUSSH} postconf -e smtpd_tls_cert_file=/etc/letsencrypt/live/lslinux/fullchain.pem (idem key_file + dovecot 10-ssl.conf), puis reload postfix/dovecot\n"
 }
 
@@ -38,6 +58,7 @@ status() {
 case "${1}" in
   backup)  backup;;
   restore) restore;;
+  hooks)   hooks;;
   status)  status;;
   *)       usage;;
 esac

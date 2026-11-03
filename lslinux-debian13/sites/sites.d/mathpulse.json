@@ -1,0 +1,14 @@
+{
+  "repo": "https://github.com/lstux/MathPulse",
+  "branch": "main",
+  "build": [
+    "mkdir _site",
+    "cp -r index.html manifest.json sw.js css js assets _site/",
+    "sed -i \"s/mathpulse-v[0-9]*/mathpulse-$(git rev-parse --short HEAD)/\" _site/sw.js",
+    "sed -i \"s/const APP_BUILD = 'dev'/const APP_BUILD = '$(git rev-parse --short HEAD)'/\" _site/js/content/skills.js"
+  ],
+  "output": "_site",
+  "title": "MathPulse",
+  "desc": "Calcul mental, avec une fusée et un renard",
+  "icon": "🚀"
+}

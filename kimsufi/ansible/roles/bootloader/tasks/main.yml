@@ -5,9 +5,6 @@
 - name: Install GRUB
   ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} emerge --update --newuse sys-boot/grub"
 
-- name: Install bootloader to disk
-  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} grub-install --efi-directory=/efi"
-
 - name: Setup GRUB options
   ansible.builtin.lineinfile:
     path: "{{ rootfs_mountpoint }}/etc/default/grub"
@@ -15,22 +12,37 @@
     line: '{{ item.key }}="{{ item.value }}"'
   with_items:
     - { key: "GRUB_CMDLINE_LINUX", value: "net.ifnames=0 dolvm{{ ' domdadm' if disks | length > 1 else '' }}" }
-    - { key: "GRUB_PRELOAD_MODULES", value: "lvm mdraid1x btrfs ext2" }
+    # - { key: "GRUB_PRELOAD_MODULES", value: "lvm{{ ' mdraid1x' if disks | length > 1 else '' }}" }
     - { key: "GRUB_DISABLE_OS_PROBER", value: "true" }
+
+- name: Install bootloader to disk
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} grub-install --efi-directory=/efi"
+
+- name: Install bootloader to additional disks
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} grub-install --efi-directory=/efi{{ bootindex + 2 }}"
+  loop: "{{ disks[1:] }}"
+  loop_control:
+    index_var: bootindex
+
+- name: Get /boot partition UUID
+  ansible.builtin.command: "blkid -s UUID -o value {{ '/dev/md0' if disks | length > 1 else disks[0] + 'p2' }}" 
+  register: boot_uuid
+
+- name: Write efi grub config for root partition
+  ansible.builtin.copy:
+    dest: "{{ rootfs_mountpoint }}/efi/EFI/gentoo/grub.cfg"
+    content: |
+      search --no-floppy --fs-uuid --set=root {{ boot_uuid.stdout }}
+      configfile /grub/grub.cfg
+
+# - name: Install bootloader to disk (removable)
+#   ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} grub-install --removable --efi-directory=/efi"
+
+# - name: Install bootloader to additional disks (removable)
+#   ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} grub-install --removable --efi-directory=/efi{{ bootindex + 2 }}"
+#   loop: "{{ disks[1:] }}"
+#   loop_control:
+#     index_var: bootindex
 
 - name: Generate GRUB configuration
   ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} grub-mkconfig -o /boot/grub/grub.cfg"
-
-- name: Synchronize additional EFI partitions
-  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} rsync -a --delete /efi/ /efi{{ bootindex + 2 }}/"
-  loop: "{{ disks[1:] }}"
-  loop_control:
-    index_var: bootindex
-  when: disks | length > 1
-
-- name: Synchronize additional boot partitions
-  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} rsync -a --delete /boot/ /boot{{ bootindex + 2 }}/"
-  loop: "{{ disks[1:] }}"
-  loop_control:
-    index_var: bootindex
-  when: disks | length > 1

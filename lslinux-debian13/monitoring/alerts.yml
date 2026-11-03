@@ -31,3 +31,28 @@ groups:
         for: 1h
         labels: {severity: warning}
         annotations: {summary: "NVMe {{ $labels.device }} : usure elevee ou spare faible"}
+      - alert: SecurityUpdatesPending
+        expr: sum(apt_upgrades_pending{origin=~".*security.*"}) > 0
+        for: 24h
+        labels: {severity: warning}
+        annotations: {summary: "Mises a jour de securite Debian en attente depuis plus de 24 h"}
+      - alert: AptCacheStale
+        expr: time() - apt_package_cache_timestamp_seconds > 3 * 86400
+        for: 1h
+        labels: {severity: warning}
+        annotations: {summary: "apt update pas execute depuis plus de 3 jours : les alertes de MAJ sont aveugles"}
+      - alert: RebootRequired
+        expr: node_reboot_required > 0
+        for: 7d
+        labels: {severity: warning}
+        annotations: {summary: "Redemarrage requis (noyau/libc) depuis plus de 7 jours"}
+      - alert: NextcloudUpdateAvailable
+        expr: nextcloud_core_update_available > 0 or nextcloud_apps_updates_available > 0
+        for: 1d
+        labels: {severity: warning}
+        annotations: {summary: "Mise a jour Nextcloud disponible (core ou apps)"}
+      - alert: NextcloudUpdateCheckFailing
+        expr: nextcloud_update_check_ok == 0 or time() - nextcloud_update_check_timestamp_seconds > 3 * 86400
+        for: 1h
+        labels: {severity: warning}
+        annotations: {summary: "La verification des MAJ Nextcloud echoue ou n'a pas tourne depuis 3 jours"}

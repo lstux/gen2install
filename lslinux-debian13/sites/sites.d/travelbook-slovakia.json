@@ -1,0 +1,13 @@
+{
+  "repo": "https://github.com/lstux/TravelBook-Slovakia",
+  "branch": "main",
+  "name": "travelbook",
+  "build": [
+    "git clone -q --depth 1 https://github.com/lstux/TravelBook ../engine",
+    "python3 ../engine/publish.py --data . --export site"
+  ],
+  "output": "site",
+  "title": "TravelBook",
+  "desc": "Carnet de voyage en Slovaquie",
+  "icon": "🧭"
+}

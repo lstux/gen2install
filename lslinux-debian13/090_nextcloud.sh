@@ -9,7 +9,7 @@ NC_GPG_FPR="${NC_GPG_FPR:-}"
 # Destination des donnees pour "save" (disque hors lslng).
 NC_BACKUP_DIR="${NC_BACKUP_DIR:-}"
 # Source de l'ancienne instance (genserv, Gentoo, Nextcloud 31.0.7).
-GS_SSH="ssh -o ConnectTimeout=10 root@www.lslinux.org"
+GS_SSH="ssh -o ConnectTimeout=10 root@genserv.lslinux.org"
 GS_NC_DIR="/var/www/localhost/htdocs/nextcloud"
 
 usage() {

@@ -1,0 +1,124 @@
+#!/bin/sh
+# Publie un site statique GitHub sur <name>.lslinux.org (/var/www/lstux/<name>).
+# A lancer sur lslng, en utilisateur "lstux" (sans sudo) ; 120_sites.sh le lance
+# dans un bac a sable systemd. Depots publics uniquement.
+#
+# Usage : publish-github <conf.json>
+#         publish-github --rollback <name>
+#         publish-github --list
+#
+# conf.json :
+#   repo    (obligatoire) https://github.com/<owner>/<repo>[.git]
+#   branch  branche a cloner (defaut : branche par defaut du depot)
+#   name    sous-domaine ; defaut = nom du depot en minuscules ([a-z0-9-]+)
+#   build   liste de commandes (sh -e), lancees dans le clone, dans l'ordre ; le
+#           clone est un enfant du dossier de travail (".." est inscriptible)
+#   output  dossier a publier, relatif au clone (defaut : "." = le clone)
+# Le contenu publie doit avoir un index.html a sa racine. Les commandes de "build"
+# sont celles que l'on lancerait a la main (python3 build.py ...), sans secret ni sudo.
+#
+# Dispositions : /var/www/lstux/<name> est un lien vers .releases/<name>/<horodatage>
+# (bascule atomique, 3 releases gardees, rollback = lien precedent).
+
+set -eu
+umask 022
+
+BASE="${LSTUX_BASE:-/var/www/lstux}"
+KEEP=3
+RESERVED=" www mail smtp imap pop ns ns1 ns2 sdns2 ftp cloud grafana wm mailadmin adm acme lslng genserv nsbox autoconfig autodiscover "
+
+die() { printf "ERREUR : %s\n" "$*" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || die "jq requis"
+command -v git >/dev/null 2>&1 || die "git requis"
+
+valid_name() {
+  case "$1" in ''|-*|*-|*[!a-z0-9-]*) return 1 ;; esac
+  [ "${#1}" -le 40 ] || return 1
+  case "${RESERVED}" in *" $1 "*) die "nom reserve : $1" ;; esac
+}
+
+switch_link() { # name releasedir
+  ln -sfn "$2" "${BASE}/.$1.new" && mv -T "${BASE}/.$1.new" "${BASE}/$1"
+}
+
+list_sites() {
+  for l in "${BASE}"/*; do
+    [ -L "${l}" ] || continue
+    printf "%s -> %s\n" "${l##*/}" "$(readlink "${l}")"
+  done
+}
+
+rollback() {
+  n="$1"; valid_name "${n}" || die "nom invalide : ${n}"
+  cur="$(readlink "${BASE}/${n}" 2>/dev/null)" || die "${n} n'est pas publie"
+  prev="$(ls -1d "${BASE}/.releases/${n}"/* 2>/dev/null | sort | awk -v c="${cur}" '$0==c {print p; exit} {p=$0}')"
+  [ -n "${prev}" ] || die "pas de release precedente pour ${n}"
+  switch_link "${n}" "${prev}"
+  printf "%s : retour a %s\n" "${n}" "${prev}"
+}
+
+case "${1:-}" in
+  --list) list_sites; exit 0 ;;
+  --rollback) [ "$#" -eq 2 ] || die "usage : --rollback <name>"; rollback "$2"; exit 0 ;;
+  ''|-*) printf "Usage : %s <conf.json> | --rollback <name> | --list\n" "$(basename "$0")" >&2; exit 1 ;;
+esac
+
+conf="$1"
+[ -f "${conf}" ] || die "conf introuvable : ${conf}"
+jq -e . "${conf}" >/dev/null 2>&1 || die "JSON invalide : ${conf}"
+get() { jq -r --arg k "$1" '.[$k] // empty' "${conf}"; }
+
+repo="$(get repo)"; branch="$(get branch)"; name="$(get name)"; output="$(get output)"
+[ -n "${repo}" ] || die "champ repo obligatoire"
+repo="${repo%.git}"
+printf '%s' "${repo}" | grep -Eq '^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' \
+  || die "repo doit etre https://github.com/<owner>/<repo>"
+[ -n "${name}" ] || name="$(printf '%s' "${repo##*/}" | tr 'A-Z' 'a-z')"
+valid_name "${name}" || die "nom de site invalide : '${name}' ([a-z0-9-], pas de tiret en bord)"
+printf '%s' "${branch}" | grep -Eq '^[A-Za-z0-9._/-]*$' || die "caracteres interdits dans branch"
+output="${output:-.}"
+case "${output}" in /*|*..*) die "output invalide" ;; esac
+case "${branch}" in *..*|-*) die "branch invalide" ;; esac
+
+mkdir -p "${BASE}/.releases/${name}"
+[ -e "${BASE}/${name}" ] && [ ! -L "${BASE}/${name}" ] && die "${BASE}/${name} existe et n'est pas un lien : refus"
+
+# un seul publish a la fois par site
+exec 9>"${BASE}/.releases/${name}/.lock"
+flock -n 9 || die "publication deja en cours pour ${name}"
+
+ts="$(date +%Y%m%d%H%M%S)"
+work="$(mktemp -d "${BASE}/.releases/${name}/.tmp.XXXXXX")"
+trap 'rm -rf "${work}"' EXIT INT TERM
+src="${work}/src"
+
+# Environnement minimal pour git et le build (pas d'heritage de l'appelant)
+run() { env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="${work}" LANG=C.UTF-8 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https "$@"; }
+
+printf "[%s] clone : %s %s\n" "${name}" "${repo}" "${branch:+(${branch})}"
+run git clone -q --depth 1 --single-branch ${branch:+--branch "${branch}"} -c advice.detachedHead=false "${repo}.git" "${src}" \
+  || die "git clone impossible"
+
+jq -r 'if (.build|type)=="array" then .build[] elif (.build|type)=="string" then .build else empty end' "${conf}" > "${work}/build.list"
+while IFS= read -r cmd <&3; do
+  printf "[%s] build : %s\n" "${name}" "${cmd}"
+  ( cd "${src}" && run timeout 900 sh -ec "${cmd}" </dev/null ) || die "commande de build en echec : ${cmd}"
+done 3< "${work}/build.list"
+
+root="${src}/${output}"
+[ -d "${root}" ] || die "dossier output absent : ${output}"
+[ -f "${root}/index.html" ] || die "pas d'index.html a la racine de ${output} : rien de publie"
+
+# Nettoyage : pas de liens, pas de depot git ni de CI dans l'arbre servi
+nl="$(find "${root}" -type l | wc -l)"
+[ "${nl}" -eq 0 ] || { printf "[%s] attention : %s lien(s) symbolique(s) supprime(s)\n" "${name}" "${nl}"; find "${root}" -type l -delete; }
+rm -rf "${root}/.git" "${root}/.github"
+chmod -R u=rwX,go=rX "${root}"
+
+rel="${BASE}/.releases/${name}/${ts}"
+mv "${root}" "${rel}"
+switch_link "${name}" "${rel}"
+printf "[%s] publie : %s -> %s\n" "${name}" "https://${name}.lslinux.org/" "${rel}"
+
+# Ne garder que les KEEP dernieres releases
+ls -1d "${BASE}/.releases/${name}"/[0-9]* 2>/dev/null | sort | head -n "-${KEEP}" | while read -r old; do rm -rf -- "${old}"; done

@@ -7,6 +7,8 @@
 {% endfor %}
 {% endif %}
 
+{{ "/dev/md0" if (disks | length > 1) else disks[0] + "p2" }} /boot   ext4    defaults    0 0
+
 {% for lv in lvm_lvs -%}
 /dev/{{ lvm_vg }}/{{ lv.name }} {{ lv.mountpoint }} {{ lv.fs_type }}    {{ lv.options if lv.options is defined else "defaults" }}   0 {{ loop.index if loop.index < 2 else loop.index + 1 }}
 {% endfor %}

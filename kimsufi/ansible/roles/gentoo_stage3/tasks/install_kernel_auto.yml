@@ -7,7 +7,8 @@
     line: "{{ item.name }} {{ item.use }}"
     create: true
   with_items:
-    - { name: "sys-kernel/installkernel", use: "grub dracut" }
+    - { name: "sys-kernel/installkernel", use: "dracut uki" }
+    - { name: "systemd-utils", use: "boot kernel-install" }
 
 - name: Install installkernel
   ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} emerge sys-kernel/installkernel"
@@ -20,7 +21,7 @@
     state: directory
     mode: '0755'
   with_items:
-    - "/efi/EFI/Gentoo"
+    - "/efi/EFI/Linux"
     - "/etc/dracut.conf.d"
 
 - name: Get root partition UUID
@@ -31,9 +32,9 @@
   ansible.builtin.copy:
     dest: "{{ rootfs_mountpoint }}/etc/dracut.conf.d/00-installkernel.conf"
     content: |
-      kernel_cmdline=" root=UUID={{ root_partition_uuid.stdout }} "
+      kernel_cmdline="root=UUID={{ root_partition_uuid.stdout }} domdadm dolvm net.ifnames=0 console=tty0 console=ttyS0,115200n8 earlyprintk=efi,keep nomodeset video=efifb:off initcall_blacklist=simpledrm_platform_driver_init"
     mode: '0644'
 
 - name: Install gentoo-kernel-bin
-  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} emerge gentoo-kernel-bin"
+  ansible.builtin.command: "/usr/local/bin/chrootrun {{ rootfs_mountpoint }} emerge linux-firmware gentoo-kernel-bin"
 

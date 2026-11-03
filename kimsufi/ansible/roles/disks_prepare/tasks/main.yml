@@ -16,6 +16,18 @@
 # -------------------------
 # OPTIONAL WIPE
 # -------------------------
+- name: Stop LVM (if wiping)
+  ansible.builtin.command: "vgchange -an {{ lvm_vg }}"
+  when: wipe_disks
+  failed_when: false
+  changed_when: false
+
+- name: Stop existing RAID (if wiping)
+  ansible.builtin.command: "mdadm --stop /dev/md0"
+  when: wipe_disks
+  failed_when: false
+  changed_when: false
+
 - name: Wipe filesystem signatures
   ansible.builtin.command: "wipefs -a {{ item }}"
   loop: "{{ disks }}"
@@ -37,20 +49,31 @@
     number: 1
     label: gpt
     part_start: "1MiB"
-    part_end: "{{ partitions[0].size }}"
+    part_end: "{{ partitions[0].size }}MiB"
     name: "{{ partitions[0].name }}"
     flags: [ boot, esp ]
+    state: present
+  loop: "{{ disks }}"
+
+- name: Create Boot partition
+  ansible.builtin.parted:
+    device: "{{ item }}"
+    number: 2
+    label: gpt
+    part_start: "{{ partitions[0].size }}MiB"
+    part_end: "{{ (partitions[0].size + partitions[1].size) }}MiB"
+    name: "{{ partitions[1].name }}"
     state: present
   loop: "{{ disks }}"
 
 - name: Create LVM partition
   ansible.builtin.parted:
     device: "{{ item }}"
-    number: 2
+    number: 3
     label: gpt
-    part_start: "{{ partitions[0].size }}"
+    part_start: "{{ (partitions[0].size + partitions[1].size) }}MiB"
     part_end: "100%"
-    name: "{{ partitions[1].name }}"
+    name: "{{ partitions[2].name }}"
     flags: [ lvm ]
     state: present
   loop: "{{ disks }}"
@@ -60,17 +83,18 @@
 # -------------------------
 - name: Build partition paths
   ansible.builtin.set_fact:
-    boot_parts: "{{ disks | map('regex_replace', '$', 'p1') | list }}"
-    lvmpv_parts: "{{ disks | map('regex_replace', '$', 'p2') | list }}"
+    efi_parts: "{{ disks | map('regex_replace', '$', 'p1') | list }}"
+    boot_parts: "{{ disks | map('regex_replace', '$', 'p2') | list }}"
+    lvmpv_parts: "{{ disks | map('regex_replace', '$', 'p3') | list }}"
 
 # -------------------------
-# FORMAT BOOT
+# FORMAT EFI PARTITIONS
 # -------------------------
-- name: Format boot partitions
+- name: Format EFI partitions
   ansible.builtin.filesystem:
     fstype: "{{ partitions[0].fs_type }}"
     dev: "{{ item }}"
-  loop: "{{ boot_parts }}"
+  loop: "{{ efi_parts }}"
 
 # -------------------------
 # RAID SETUP
@@ -82,25 +106,40 @@
          '5' if disks | length > 2 else
          '0' }}
 
-- name: Stop existing RAID (if wiping)
-  ansible.builtin.command: "mdadm --stop /dev/md0"
-  when: wipe_disks
-  failed_when: false
-  changed_when: false
+- name: Debug RAID level
+  ansible.builtin.debug:
+    msg: "RAID level determined as {{ raid_level }} with {{ lvmpv_parts | join(', ') }}."
 
-- name: Create RAID
-  ansible.builtin.command: "mdadm --create /dev/md0 --force --run --level={{ raid_level }} --raid-devices={{ disks | length }} {{ lvmpv_parts | join(' ') }}"
+- name: Create RAID for boot partitions
+  ansible.builtin.command: "mdadm --create /dev/md0 --metadata=1.0 --force --run --level={{ raid_level }} --raid-devices={{ disks | length }} {{ boot_parts | join(' ') }}"
   args:
     creates: /dev/md0
   when: raid_level != "0"
 
-# -------------------------
-# DEFINE LVM DEVICE
-# -------------------------
+- name: Create RAID for LVM PVs
+  ansible.builtin.command: "mdadm --create /dev/md1 --force --run --level={{ raid_level }} --raid-devices={{ disks | length }} {{ lvmpv_parts | join(' ') }}"
+  args:
+    creates: /dev/md1
+  when: raid_level != "0"
+
+# --------------------------
+# DEFINE RAID/SINGLE DEVICES
+# --------------------------
 - name: Set LVM PV device
   ansible.builtin.set_fact:
+    boot_device: >-
+      {{ '/dev/md0' if (disks | length > 1) else boot_parts[0] }}
     lvm_pv_device: >-
-      {{ '/dev/md0' if (disks | length > 1) else lvmpv_parts[0] }}
+      {{ '/dev/md1' if (disks | length > 1) else lvmpv_parts[0] }}
+
+
+# -------------------------
+# FORMAT BOOT PARTITION
+# -------------------------
+- name: Format boot partition
+  ansible.builtin.filesystem:
+    fstype: "{{ partitions[1].fs_type }}"
+    dev: "{{ boot_device }}"
 
 # -------------------------
 # CREATE PV / VG
@@ -156,10 +195,24 @@
   loop: "{{ lvm_lvs }}"
   when: item.mountpoint is defined
 
+- name: Mount Boot partition
+  ansible.builtin.mount:
+    path: "{{ rootfs_mountpoint }}/boot"
+    src: "{{ boot_device }}"
+    fstype: "{{ partitions[1].fs_type }}"
+    opts: defaults
+    state: mounted
+
+- name: Create /boot/boot link
+  ansible.builtin.file:
+    dest: "{{ rootfs_mountpoint }}/boot/boot"
+    src: "."
+    state: link
+
 - name: Mount EFI partition
   ansible.builtin.mount:
     path: "{{ rootfs_mountpoint }}/efi"
-    src: "{{ boot_parts[0] }}"
+    src: "{{ efi_parts[0] }}"
     fstype: "vfat"
     opts: defaults
     state: mounted
@@ -171,7 +224,7 @@
     fstype: "vfat"
     opts: defaults
     state: mounted
-  loop: "{{ boot_parts[1:] }}"
+  loop: "{{ efi_parts[1:] }}"
   loop_control:
     index_var: bootindex
-  when: boot_parts | length > 1
+  when: efi_parts | length > 1

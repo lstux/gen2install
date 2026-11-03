@@ -1,0 +1,42 @@
+---
+- name: Debootstrap Gentoo on Debian installed server
+  hosts: lslng.lslinux.org,
+  become: true
+  user: debian
+
+  vars:
+    hostname: "lslng"
+    wipe_disks: false
+    disks:
+      - "/dev/nvme0n1"
+      - "/dev/nvme1n1"
+    partitions:
+      - { name: "efi",   size: 512,    type: "primary", fs_type: "vfat" } # Mandatory EFI partition
+      - { name: "boot",  size: 1024,   type: "primary", fs_type: "ext4" } # Mandatory Boot partition
+      - { name: "lvmpv", size: "100%", type: "primary", fs_type: "lvm" }  # Mandatory LVM PV partition
+    lvm_vg: "vg" # Volume group name for LVM
+    lvm_lvs:
+      - { name: "lvgentoo",  size: "30g", fs_type: "btrfs", mountpoint: "/" } # Mandatory root LV
+      - { name: "lvhome",    size: "10g", fs_type: "btrfs", mountpoint: "/home" }
+      - { name: "lvtmpdata", size: "10g", fs_type: "btrfs", mountpoint: "/tmpdata" }
+    rootfs_mountpoint: "/mnt/gentoo"
+    locales: [ "en_US.UTF-8", "fr_FR.UTF-8" ]
+
+
+  #var_files:
+  #  - vars/common.yml
+  #  - vars/lslng.yml
+
+  roles:
+    #- role: disks_prepare
+    #  state: present
+    #  tags: [disks]
+    - role: gentoo_stage3
+      state: present
+      tags: [stage3]
+    - role: system_configuration
+      state: present
+      tags: [sysconfig]
+    - role: bootloader
+      state: present
+      tags: [bootloader]

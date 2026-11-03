@@ -38,7 +38,7 @@
 
 - name: Enable logger and cron daemons
   ansible.builtin.command:
-    cmd: "chrootrun {{ rootfs_mountpoint }} rc-update add {{ item }} default"
+    cmd: "chrootrun {{ rootfs_mountpoint }} {{ 'rc-update add ' + item + ' default' if gentoo_init == 'openrc' else 'systemctl enable ' + item }}"
   with_items:
     - "{{ syslogger }}"
     - "{{ crondaemon }}"
@@ -51,7 +51,16 @@
 
 - name: Install additional system tools
   ansible.builtin.command:
-    cmd: "chrootrun {{ rootfs_mountpoint }} emerge --update --newuse sys-apps/mlocate app-shells/bash-completion net-misc/chrony dosfstools btrfs-progs"
+    cmd: "chrootrun {{ rootfs_mountpoint }} emerge --update --newuse sys-apps/mlocate app-shells/bash-completion net-misc/chrony dosfstools btrfs-progs mdadm gentoolkit"
+
+- name: Make sure mdadm.conf is initialized
+  ansible.builtin.shell:
+    cmd: 'grep -Eq "^ARRAY" {{ rootfs_mountpoint }}/etc/mdadm.conf || chrootrun {{ rootfs_mountpoint }} mdadm --examine --scan >> {{ rootfs_mountpoint }}/etc/mdadm.conf'
+
+- name: Enable mdraid service
+  ansible.builtin.command:
+    cmd: "chrootrun {{ rootfs_mountpoint }} {{ 'rc-update add mdraid default' if gentoo_init == 'openrc' else 'systemctl enable mdraid' }}"
+  when: disks | length > 1
 
 - name: Enable SSH/Chrony daemons
   ansible.builtin.command:
