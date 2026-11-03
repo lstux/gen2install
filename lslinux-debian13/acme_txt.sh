@@ -1,9 +1,8 @@
 #!/bin/sh
 # A lancer en ROOT. Ajoute/retire un enregistrement _acme-challenge TXT sur
 # une zone, bump le serial, valide, reload. Meme script sur genserv
-# (ZONEDIR=/var/bind/pri) et lslng (ZONEDIR=/etc/bind/zones) via la variable
-# d'environnement ACME_ZONEDIR (defaut genserv). Deploye en /root/acme_txt.sh
-# sur les deux serveurs, appele par 060_certbot_dns01.sh et les hooks certbot.
+# (ZONEDIR=/var/bind/pri) et lslng (ZONEDIR=/etc/bind/zones), fourni via la
+# variable d'environnement ACME_ZONEDIR (sinon defaut genserv).
 #
 # Usage : sh acme_txt.sh {add|remove} <domaine> <valeur>
 
