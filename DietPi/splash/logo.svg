@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <rect width="400" height="400" fill="#0b1220"/>
+  <g transform="translate(200 130)" stroke="#e8eef7" stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M-52 -52 L52 52 M52 -52 L-52 52"/>
+    <g stroke="#ff7a1a" stroke-width="5">
+      <circle cx="-62" cy="-62" r="26"/><circle cx="62" cy="-62" r="26"/>
+      <circle cx="-62" cy="62" r="26"/><circle cx="62" cy="62" r="26"/>
+    </g>
+    <rect x="-20" y="-14" width="40" height="28" rx="7" fill="#ff7a1a" stroke="none"/>
+    <circle cx="0" cy="0" r="6" fill="#0b1220" stroke="none"/>
+  </g>
+  <text x="200" y="290" text-anchor="middle" font-family="DejaVu Sans, Liberation Sans, sans-serif" font-weight="bold" font-size="76" letter-spacing="6" fill="#ffffff">FPV</text>
+  <text x="200" y="335" text-anchor="middle" font-family="DejaVu Sans, Liberation Sans, sans-serif" font-size="26" fill="#9db4d3">fpv.lslinux.org</text>
+</svg>
