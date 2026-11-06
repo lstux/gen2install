@@ -1,0 +1,13 @@
+{
+  "repo": "https://github.com/lstux/FPVTools",
+  "branch": "main",
+  "name": "fpv",
+  "build": [
+    "mkdir _site",
+    "cp index.html _site/"
+  ],
+  "output": "_site",
+  "title": "FPV",
+  "desc": "Liens utiles et outils",
+  "icon": "🛩️"
+}
