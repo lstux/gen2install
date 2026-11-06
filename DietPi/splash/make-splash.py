@@ -3,7 +3,7 @@
 Needs rsvg-convert and python3-pillow. Run it after changing logo.svg, commit the results.
 
 fpv-pitft-240x320 / fpv-pitft-320x240 : RGB565 of the PiTFT 2.8" (fbtft turns the picture by itself, upright)
-fpv-hdmi-<rotation>                   : 1024x600 XRGB8888 of the HDMI panel, the picture is turned in it when the
+fpv-hdmi-<rotation>                   : 1024x600 RGB565 of the HDMI panel, the picture is turned in it when the
                                         panel is mounted in portrait (rotation as -R of DietPi_Customize.sh)
 """
 import gzip, os, struct, subprocess, sys, tempfile
@@ -83,7 +83,7 @@ def variant(name, fmt, w, h, turn):
 ident = lambda im: im
 variant("fpv-pitft-240x320", rgb565, 240, 320, ident)
 variant("fpv-pitft-320x240", rgb565, 320, 240, ident)
-variant("fpv-hdmi-normal", xrgb8888, 1024, 600, ident)
-variant("fpv-hdmi-right", xrgb8888, 600, 1024, lambda im: im.rotate(-90, expand=True))
-variant("fpv-hdmi-left", xrgb8888, 600, 1024, lambda im: im.rotate(90, expand=True))
-variant("fpv-hdmi-inverted", xrgb8888, 1024, 600, lambda im: im.rotate(180))
+variant("fpv-hdmi-normal", rgb565, 1024, 600, ident)
+variant("fpv-hdmi-right", rgb565, 600, 1024, lambda im: im.rotate(-90, expand=True))
+variant("fpv-hdmi-left", rgb565, 600, 1024, lambda im: im.rotate(90, expand=True))
+variant("fpv-hdmi-inverted", rgb565, 1024, 600, lambda im: im.rotate(180))

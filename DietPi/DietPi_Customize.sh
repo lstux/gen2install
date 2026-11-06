@@ -323,7 +323,7 @@ if [ "${SPLASH}" = "on" ]; then
   else
     SPLASH_SIZE="${P_SCREEN_W},${P_SCREEN_H}"
     SPLASH_FILE="${SPLASH_DIR}/fpv-hdmi-${ROTATE}.raw.gz"
-    SPLASH_FB="/dev/fb0"; SPLASH_BPP=4
+    SPLASH_FB="/dev/fb0"; SPLASH_BPP=2
   fi
   SPLASH_ANIM="${SPLASH_FILE%.raw.gz}-anim.raw.gz"
   [ -r "${SPLASH_FILE}" ] && [ -r "${SPLASH_ANIM}" ] && [ -r "${SPLASH_ANIM%.raw.gz}.txt" ] \
