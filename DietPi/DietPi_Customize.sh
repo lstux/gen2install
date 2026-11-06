@@ -1,7 +1,8 @@
 #!/bin/sh
 # Preconfigure a DietPi image (or an SD card freshly written with one) for one of my Raspberry Pi boards:
 # unattended first run (hostname, timezone, locale, OpenSSH, user with SSH key), Waveshare HDMI LCD with XPT2046
-# touch, and depending on the board camera and I2C sensors. Ethernet, optional Wi-Fi.
+# touch, and depending on the board camera and I2C sensors. Ethernet, optional Wi-Fi. Optionally (-G) the FPV ground
+# station of FPVTools/esp-tracker, shown full screen by the kiosk.
 # Only the FAT boot partition is modified: DietPi imports dietpi.txt and the Automation_Custom_* scripts from it
 # on first boot, then removes them from it.
 set -eu
@@ -28,6 +29,13 @@ TOUCH_PMAX=""
 GYRO_SENSOR=""
 PRESSURE_SENSOR=""
 CAMERA=""
+GROUND=""
+# FPV ground station (-G): FPVTools/esp-tracker, installed from git on the first run, on this port of localhost
+GROUND_REPO="https://github.com/lstux/FPVTools"
+GROUND_PORT=8080
+GROUND_START="file:///usr/local/share/esptracker/start.html"
+# Its options: video from the HDMI capture dongle, a size a Pi 3B can decode in the browser (/etc/default/esptracker)
+GROUND_ARGS="--video auto --video-size 1280x720 --video-fps 30"
 # Public keys of the user: downloaded from the web site (no directory listing there, hence the list)
 KEYS_URL="https://lslinux.org/identities"
 KEYS_DEFAULT="id_nsd_nsvivo.pub id_nsd_nsbox.pub id_nsd_pixel8.pub"
@@ -127,6 +135,9 @@ usage() {
   printf "  -g SENSOR : gyroscope/accelerometer on I2C, mpu6050 or none (default: board)\n"
   printf "  -b SENSOR : pressure sensor on I2C, bmp180, bme280 or none (default: board)\n"
   printf "  -C on|off : camera module (default: board)\n"
+  printf "  -G on|off : FPV ground station (FPVTools esp-tracker: ELRS telemetry, antenna tracker, video of the goggles\n"
+  printf "              through an HDMI capture dongle), started at boot (default: off). Without -U the kiosk shows it,\n"
+  printf "              in its touch screen mode\n"
   printf "  -h        : display this help message\n"
   exit "${1:-1}"
 }
@@ -134,7 +145,7 @@ usage() {
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*" >&2; }
 
-while getopts B:H:u:k:p:t:l:K:w:c:S:U:F:s:T:P:R:X:D:g:b:C:h opt; do case "${opt}" in
+while getopts B:H:u:k:p:t:l:K:w:c:S:U:F:s:T:P:R:X:D:g:b:C:G:h opt; do case "${opt}" in
   B) BOARD="${OPTARG}";;
   H) HOSTNAME_NEW="${OPTARG}";;
   u) USER_NAME="${OPTARG}";;
@@ -157,6 +168,7 @@ while getopts B:H:u:k:p:t:l:K:w:c:S:U:F:s:T:P:R:X:D:g:b:C:h opt; do case "${opt}
   g) GYRO_SENSOR="${OPTARG}";;
   b) PRESSURE_SENSOR="${OPTARG}";;
   C) CAMERA="${OPTARG}";;
+  G) GROUND="${OPTARG}";;
   h) usage 0;;
   *) usage;;
 esac; done
@@ -222,6 +234,14 @@ case "${WIFI_COUNTRY}" in
   [A-Z][A-Z]) ;;
   *) die "invalid Wi-Fi country code '${WIFI_COUNTRY}' (two capital letters, eg. FR)";;
 esac
+GROUND="${GROUND:-off}"
+case "${GROUND}" in
+  on|off) ;;
+  *) die "invalid -G '${GROUND}' (on or off)";;
+esac
+# The ground station is shown by the kiosk unless another page was asked for. It goes through a local page that waits
+# for the service: Chromium may well start before it.
+if [ "${GROUND}" = "on" ] && [ -z "${KIOSK_URL}" ]; then KIOSK_URL="${GROUND_START}"; fi
 # The URL ends up in dietpi.txt and on a command line of DietPi: no blank, quote, backslash, $ or backtick
 case "${KIOSK_URL}" in
   "") ;;
@@ -304,6 +324,11 @@ if [ "${I2C}" = "on" ]; then APT_INSTALLS="${APT_INSTALLS} i2c-tools"; fi
 if [ "${CAMERA}" = "on" ]; then APT_INSTALLS="${APT_INSTALLS} v4l-utils rpicam-apps-lite"; fi
 # Fonts for web pages in the kiosk: the base image has hardly any (Noto covers most scripts, no CJK: it weighs 89 MB)
 if [ -n "${KIOSK_URL}" ]; then APT_INSTALLS="${APT_INSTALLS} fonts-noto-core fonts-noto-color-emoji fonts-liberation fonts-dejavu"; fi
+# Ground station: ffmpeg for the capture dongle, git to fetch it, Python and its libraries from Debian (nothing to build
+# on the board; pip only adds what Debian has too old)
+if [ "${GROUND}" = "on" ]; then
+  APT_INSTALLS="${APT_INSTALLS} git ffmpeg v4l-utils python3-venv python3-pip python3-setuptools python3-fastapi python3-uvicorn python3-websockets python3-serial"
+fi
 # The long press on the reload button powers off: it listens to the key events
 if [ "${BUTTONS}" = "on" ]; then APT_INSTALLS="${APT_INSTALLS} evtest"; fi
 # Touch calibration, needs an X session (see the comment of the ads7846 line in config.txt)
@@ -337,7 +362,7 @@ if [ "$(id -u)" -ne 0 ]; then
   TARGET="$(realpath "${TARGET}")"
   set -- -B "${BOARD}" -H "${HOSTNAME_NEW}" -u "${USER_NAME}" -t "${TIMEZONE}" -l "${LOCALE}" \
     -K "${KEYBOARD_LAYOUT}" -c "${WIFI_COUNTRY}" -S "${SSH_SERVER}" -F "${BUTTONS}" -s "${SPLASH}" -T "${PENIRQ_GPIO}" -X "${TOUCH_SWAP}" -R "${ROTATE}" -P "${TOUCH_PMAX}" -D "${SCREEN_KIND}" -g "${GYRO_SENSOR}" -b "${PRESSURE_SENSOR}" \
-    -C "${CAMERA}"
+    -C "${CAMERA}" -G "${GROUND}"
   if [ -n "${PASSWORD}" ]; then set -- "$@" -p "${PASSWORD}"; fi
   if [ -n "${KIOSK_URL}" ]; then set -- "$@" -U "${KIOSK_URL}"; fi
   if [ -n "${WPA_FILE}" ]; then set -- "$@" -w "$(realpath "${WPA_FILE}")"; else set -- "$@" -w none; fi
@@ -898,7 +923,7 @@ info "Automation_Custom_PreScript.sh: user ${USER_NAME}, $(grep -c . "${KEYS_FIL
 # - PiTFT: installing X software makes DietPi switch the KMS driver on again, which takes the framebuffer numbers
 #   the X configuration relies on (the PiTFT must stay /dev/fb1): switch it off.
 POSTSCRIPT="${MNT}/Automation_Custom_Script.sh"
-if [ -n "${WPA_FILE}" ] || [ "${SCREEN_KIND}" = "pitft28" ] || [ "${SPLASH}" = "on" ]; then
+if [ -n "${WPA_FILE}" ] || [ "${SCREEN_KIND}" = "pitft28" ] || [ "${SPLASH}" = "on" ] || [ "${GROUND}" = "on" ]; then
   cat > "${POSTSCRIPT}" <<'EOF'
 #!/bin/bash
 # Generated by DietPi_Customize.sh: run once by DietPi at the end of the first run setup
@@ -937,6 +962,91 @@ sed -i -E 's/^(dtoverlay=vc4-f?kms-v3d)/#\1/' /boot/firmware/config.txt
 log "KMS switched off again, the PiTFT stays /dev/fb1"
 EOF
     info "Automation_Custom_Script.sh: KMS switched off after the installs (PiTFT)"
+  fi
+  if [ "${GROUND}" = "on" ]; then
+    {
+      printf "\nGS_USER='%s'; GS_REPO='%s'; GS_PORT='%s'; GS_ARGS='%s'\n" "${USER_NAME}" "${GROUND_REPO}" "${GROUND_PORT}" "${GROUND_ARGS}"
+      cat <<'EOF'
+# FPV ground station (FPVTools/esp-tracker): code in /opt/fpvtools, Python environment in /opt/esptracker (it sees the
+# Debian packages, pip only adds what they lack), a service as the user (dialout for the tracker, video for the dongle)
+cat > /usr/local/sbin/esptracker-update <<EOF_UPD
+#!/bin/sh
+# Install or update the ground station from git, then (re)start it
+set -e
+if [ -d /opt/fpvtools/.git ]; then git -C /opt/fpvtools pull --ff-only -q; else git clone -q --depth 1 ${GS_REPO} /opt/fpvtools; fi
+[ -x /opt/esptracker/bin/python ] || python3 -m venv --system-site-packages /opt/esptracker
+/opt/esptracker/bin/pip install -q --no-build-isolation --upgrade /opt/fpvtools/esp-tracker/backend
+if [ "\${1:-}" != "--no-restart" ]; then systemctl restart esptracker; fi
+EOF_UPD
+chmod 755 /usr/local/sbin/esptracker-update
+if /usr/local/sbin/esptracker-update --no-restart; then
+  log "ground station installed in /opt/esptracker"
+else
+  log "ground station NOT installed (network?): run esptracker-update once the board is online"
+fi
+# Options of the service, kept on updates
+if [ ! -f /etc/default/esptracker ]; then
+  cat > /etc/default/esptracker <<EOF_DEF
+# Options of the ground station (/opt/esptracker/bin/esptracker --help), then: systemctl restart esptracker
+# --video auto: the first capture device (off without the HDMI dongle). A Pi 3B decodes 1280x720 at 30 fps, not 1080p.
+# --host 0.0.0.0 makes it reachable from a phone on the same network (no authentication).
+ESPTRACKER_ARGS="${GS_ARGS}"
+EOF_DEF
+fi
+cat > /etc/systemd/system/esptracker.service <<EOF_UNIT
+[Unit]
+Description=FPV ground station (ELRS telemetry, antenna tracker, video)
+After=network.target
+
+[Service]
+User=${GS_USER}
+EnvironmentFile=-/etc/default/esptracker
+ExecStart=/opt/esptracker/bin/esptracker --http-port ${GS_PORT} \$ESPTRACKER_ARGS
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF_UNIT
+mkdir -p /etc/systemd/system/multi-user.target.wants
+ln -sf /etc/systemd/system/esptracker.service /etc/systemd/system/multi-user.target.wants/esptracker.service
+systemctl daemon-reload
+systemctl start esptracker.service || true
+# Start page of the kiosk: Chromium may start before the service, this page waits for it and then opens it in touch
+# screen mode
+mkdir -p /usr/local/share/esptracker
+cat > /usr/local/share/esptracker/start.html <<EOF_HTML
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Ground station</title>
+<style>
+html,body{margin:0;height:100%;background:#1d232b;color:#e4ebf2;font:20px system-ui,sans-serif}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center}
+small{color:#8e9cab;max-width:32em;font-size:15px}
+</style></head><body>
+<div id="m">Starting the ground station…</div>
+<small id="h"></small>
+<script>
+var APP = "http://localhost:${GS_PORT}", t0 = Date.now();
+// A file:// page cannot read an http answer, but it can load a picture: one of the app answers once it is up
+function probe() {
+  var i = new Image();
+  i.onload = function () { location.replace(APP + "/?kiosk"); };
+  i.onerror = function () {
+    if (Date.now() - t0 > 60000) {
+      document.getElementById("m").textContent = "The ground station does not answer";
+      document.getElementById("h").textContent = "Over SSH: systemctl status esptracker, journalctl -u esptracker. Still trying.";
+    }
+    setTimeout(probe, 1000);
+  };
+  i.src = APP + "/static/vendor/leaflet/images/marker-icon.png?" + Date.now();
+}
+probe();
+</script></body></html>
+EOF_HTML
+log "ground station: service esptracker on port ${GS_PORT}, options in /etc/default/esptracker, esptracker-update to update"
+EOF
+    } >> "${POSTSCRIPT}"
+    info "Automation_Custom_Script.sh: ground station (esp-tracker) installed and started on port ${GROUND_PORT}"
   fi
   if [ "${SPLASH}" = "on" ]; then
     # Not before the end of the first run: its messages must stay visible. The picture is written to the framebuffer by
@@ -1052,6 +1162,9 @@ fi
 sync
 info "Done: ${IMAGE}"
 info "SSH: ssh ${USER_NAME}@${HOSTNAME_NEW}.local once the first run is over (a few minutes, the board updates itself)"
+if [ "${GROUND}" = "on" ]; then
+  info "Ground station: plug the tracker and the HDMI capture dongle on USB, its options are in /etc/default/esptracker"
+fi
 if [ "${PASSWORD_GENERATED}" = "true" ]; then
   info "Console password of root, dietpi and ${USER_NAME}: ${PASSWORD}"
 fi
