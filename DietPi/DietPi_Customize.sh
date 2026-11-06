@@ -954,16 +954,27 @@ EOF
 cat > /usr/local/sbin/boot-splash <<'EOF_SPL'
 #!/bin/sh
 # boot-splash FRAMEBUFFER WIDTH,HEIGHT BYTES_PER_PIXEL FILE.gz [ANIM.gz FIRST_ROW ROWS FRAMES BYTES_PER_ROW]
-# Show a picture made for this framebuffer, then animate some rows of it until X starts
+# Show a picture made for this framebuffer, then animate some rows of it until X starts. With KMS the framebuffer
+# of the firmware comes first and is replaced by the one of the driver a few seconds later, and the console clears
+# the screen as it takes over: the whole picture is drawn again when it is gone.
 FB=$1; SIZE=$2; BPP=$3; FILE=$4
 N=${FB##*/}
+G=/sys/class/graphics/${N}
+# Is the framebuffer the one the picture was made for (size, no padding on the lines)?
+fb_ok() {
+  [ -w "${FB}" ] && [ "$(cat "${G}/virtual_size" 2>/dev/null)" = "${SIZE}" ] \
+    && [ "$(cat "${G}/stride" 2>/dev/null)" = "$(( ${SIZE%,*} * BPP ))" ]
+}
 i=0
-while [ ! -w "${FB}" ] && [ "${i}" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
-[ -w "${FB}" ] || exit 0
-# Only if the framebuffer is what the picture was made for (size, no padding on the lines)
-[ "$(cat "/sys/class/graphics/${N}/virtual_size")" = "${SIZE}" ] || exit 0
-[ "$(cat "/sys/class/graphics/${N}/stride")" = "$(( ${SIZE%,*} * BPP ))" ] || exit 0
-zcat "${FILE}" > "${FB}"
+while ! fb_ok && [ "${i}" -lt 300 ]; do sleep 0.1; i=$((i + 1)); done
+fb_ok || { logger -t boot-splash "framebuffer ${FB} is not ${SIZE} at ${BPP} bytes per pixel, no splash"; exit 0; }
+BASE=/run/boot-splash.base
+zcat "${FILE}" > "${BASE}" || exit 0
+draw() { dd if="${BASE}" of="${FB}" bs=64k 2>/dev/null; DRV=$(cat "${G}/name"); }
+# Is the picture still there? One line of the top of the screen (the animation is further down)
+LINE=$(( 10 * ${SIZE%,*} * BPP ))
+still_there() { cmp -s -n "$(( ${SIZE%,*} * BPP ))" -i "${LINE}:${LINE}" "${FB}" "${BASE}"; }
+draw
 [ -n "$5" ] || exit 0
 ANIM=$5; ROW0=$6; ROWS=$7; FRAMES=$8; RB=$9
 TMP=/run/boot-splash.frames
@@ -971,11 +982,16 @@ zcat "${ANIM}" > "${TMP}" || exit 0
 f=0; n=0
 # 3 pictures a second (the CPU is busy booting), for 10 minutes at most
 while [ ! -e /tmp/.X11-unix/X0 ] && [ "${n}" -lt 2000 ]; do
-  dd if="${TMP}" of="${FB}" bs="${RB}" skip=$((f * ROWS)) seek="${ROW0}" count="${ROWS}" 2>/dev/null
+  if [ "$(cat "${G}/name")" != "${DRV}" ] || ! still_there; then
+    # another driver took the framebuffer over, or the console cleared the screen as it took over: draw it all again
+    fb_ok && draw
+  else
+    dd if="${TMP}" of="${FB}" bs="${RB}" skip=$((f * ROWS)) seek="${ROW0}" count="${ROWS}" 2>/dev/null
+  fi
   f=$(( (f + 1) % FRAMES )); n=$((n + 1))
   sleep 0.3
 done
-rm -f "${TMP}"
+rm -f "${TMP}" "${BASE}"
 EOF_SPL
 chmod 755 /usr/local/sbin/boot-splash
 cat > /etc/systemd/system/boot-splash.service <<EOF_UNIT
