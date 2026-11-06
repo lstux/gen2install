@@ -4,7 +4,8 @@
   "name": "fpv",
   "build": [
     "mkdir _site",
-    "cp index.html _site/"
+    "cp index.html liens.html _site/",
+    "cp -r vendor _site/"
   ],
   "output": "_site",
   "title": "FPV",
